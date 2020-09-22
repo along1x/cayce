@@ -91,3 +91,10 @@ def add_months(reference_date: dt.date, months: int) -> dt.date:
 def get_quarter(reference_date: dt.date) -> int:
     """Get the quarter (1-4) of the specified date"""
     return int(ceil(reference_date.month / 3))
+
+
+def get_start_of_quarter(reference_date: dt.date) -> dt.date:
+    year = reference_date.year
+    month = (get_quarter(reference_date) - 1) * 3 + 1
+    return dt.date(year, month, 1)
+
