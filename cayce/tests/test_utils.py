@@ -76,7 +76,8 @@ class TestUtils(unittest.TestCase):
 
         # test subtraction
         self.assertEqual(dt.date(2020, 2, 29), add_months(ref_date, -1))
-        self.assertEqual(dt.date(2019, 5, 31), add_months(ref_date, -10))
+        self.assertEqual(dt.date(2019, 12, 31), add_months(ref_date, -3))
+        self.assertEqual(dt.date(2018, 12, 31), add_months(ref_date, -15))
         self.assertEqual(dt.date(2018, 11, 30), add_months(ref_date, -16))
         self.assertEqual(dt.date(2017, 2, 28), add_months(ref_date, -37))
 

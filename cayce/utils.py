@@ -73,6 +73,9 @@ def add_months(reference_date: dt.date, months: int) -> dt.date:
 
     year = reference_date.year + target_month // 12
     month = target_month % 12
+    if month == 0:
+        month = 12
+        year -= 1
     day = reference_date.day
 
     # if the reference reference_date is EOM, make sure the adjusted date is EOM also
