@@ -7,12 +7,12 @@ Query for available documents directly from EDGAR
 import datetime as dt
 import json
 import math
-import requests
 from os import path, remove
+import requests
 import shutil
 import tempfile
-from urllib.parse import quote
 from typing import Union, List
+from urllib.parse import quote
 from zipfile import ZipFile
 
 from bs4 import BeautifulSoup
@@ -24,10 +24,8 @@ from cayce.utils import (
     split_fixed_length,
     add_months,
     get_quarter,
-    get_quarter_start_date,
+    get_start_of_quarter,
 )
-
-# https://www.sec.gov/Archives/edgar/full-index/2020/QTR1/
 
 
 class EdgarIndex:
@@ -76,8 +74,8 @@ class EdgarIndex:
             if path.exists(current_quarter_file):
                 remove(current_quarter_file)
 
-            current_quarter_start = get_quarter_start_date(dt.date.today())
-            date_mask = self._index["filing_date"] < current_quarter_start
+            current_quarter_start = get_start_of_quarter(dt.date.today())
+            date_mask = self._index["date_filed"] < current_quarter_start
             self._index[date_mask].to_csv(self._index_cache_file)
 
     def _download_index(self, reference_date: dt.date) -> str:
@@ -174,7 +172,7 @@ class EdgarIndex:
 
         # append all new index files to the master index
         self._index = pd.concat([self._index] + subindex_dfs, ignore_index=True)
-        self._index["filing_date"] = pd.to_datetime(self._index["filing_date"])
+        self._index["date_filed"] = pd.to_datetime(self._index["date_filed"])
 
     def search(
         self,
@@ -198,10 +196,10 @@ class EdgarIndex:
         """
         self._refresh_index(start_date, end_date)
 
-        date_mask = (self._index["filing_date"] >= start_date) & (
-            self._index["filing_date"] <= end_date
-        )
-        result_df = self._index[date_mask]
+        result_df = self._index[
+            (self._index["date_filed"] >= pd.to_datetime(start_date))
+            & (self._index["date_filed"] <= pd.to_datetime(end_date))
+        ]
 
         if ciks:
             if isinstance(ciks, str):
@@ -214,3 +212,14 @@ class EdgarIndex:
             result_df = result_df[result_df["form_type"].isin(form_types)]
 
         return result_df
+
+
+# # TODO: Abstract this out into a unit test
+# idx = EdgarIndex("F:/data/edgar")
+# res = idx.search(
+#     dt.date(2019, 9, 1),
+#     dt.date(2020,9,23),
+#     ciks="946581",  # TTWO
+#     form_types=["8-K", "10-Q", "10-K"],
+# )
+# res
