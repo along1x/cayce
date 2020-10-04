@@ -316,11 +316,26 @@ class FinancialDocumentParser:
         Parse as much data out of this document as possible, and return all of it
         in one huge normalized DataFrame
         """
+
+        def append_category(df: pd.DataFrame, category: str) -> pd.DataFrame:
+            df["Category"] = category
+            return df
+
         dfs = [
-            self.parse_dei_attributes(),
-            self.parse_income_statement(),
-            self.parse_comprehensive_income(),
-            self.parse_balance_sheet(),
-            self.parse_cash_flows(),
+            append_category(self.parse_dei_attributes(), "DEI"),
+            append_category(self.parse_income_statement(), "Income"),
+            append_category(self.parse_comprehensive_income(), "Comprehensive Income"),
+            append_category(self.parse_balance_sheet(), "Balance Sheet"),
+            append_category(self.parse_cash_flows(), "Cash Flow"),
         ]
-        return pd.concat(dfs, ignore_index=True)
+        merged_df = pd.concat(dfs, ignore_index=True)
+
+        # TODO: Add functionality to see which attributes haven't been picked up yet, then parse them
+
+        return merged_df
+
+
+parser = FinancialDocumentParser(
+    "ttwo", "f:/data/edgar/TAKE_TWO_INTERACTIVE_SOFTWARE_INC_10-Q_20200804.xml"
+)
+# parser.
