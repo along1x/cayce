@@ -3,15 +3,12 @@ Query for available documents directly from EDGAR
 """
 
 import datetime as dt
-import json
-import math
 from os import path, remove
 import re
 import requests
 import shutil
 import tempfile
 from typing import Union, List, Any
-from urllib.parse import quote
 from zipfile import ZipFile
 
 import pandas as pd
@@ -276,35 +273,6 @@ class EdgarIndex:
         with open(local_xbrl_file_path, mode="w") as xbrl_writer:
             xbrl_writer.writelines(xbrl_payload)
 
+        # TODO: the raw archive file should contain each form in HTML also; should probably save that too, for easier debugging
+
         return local_xbrl_file_path
-
-
-idx = EdgarIndex("F:/data/edgar")
-# res = idx.search(
-#     dt.date(2020, 6, 1),
-#     dt.date(2020, 9, 23),
-#     ciks="946581",  # TTWO
-#     form_types=["10-Q"],
-# )
-# print(res.head(20))
-
-# idx.download_xbrl(
-#     [
-#         "AT&T INC.",
-#         "10-Q",
-#         '732717'
-#         pd.Timestamp("2020-08-05 00:00:00"),
-#         "edgar/data/732717/0001562762-20-000279.txt",
-#     ]
-# )
-
-idx.download_xbrl(
-    [
-        "TAKE TWO INTERACTIVE SOFTWARE INC",
-        "10-Q",
-        "946581",
-        pd.Timestamp("2020-08-04"),
-        "edgar/data/946581/0001628280-20-011493.txt",
-    ]
-)
-

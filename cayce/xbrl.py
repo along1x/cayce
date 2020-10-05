@@ -1,14 +1,19 @@
 from collections import namedtuple
 import datetime as dt
 import re
-from typing import Any, Dict, Union, Tuple
+from typing import Any, Dict, Iterable, Set, Tuple, Union
 
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 import pandas as pd
 
+from cayce.log import get_logger
 
-class FinancialDocumentParser:
+# TODO: Add proper logging
+_LOG = get_logger(__name__)
+
+
+class FinancialStatementsParser:
     ParsedTag = namedtuple(
         "ParsedTag", ["period_start", "period_end", "attribute", "value", "currency"]
     )
@@ -18,7 +23,7 @@ class FinancialDocumentParser:
 
         with open(file_name, mode="r") as fin:
             contents = fin.read()
-        self._soup = BeautifulSoup(contents, "lxml")
+        self._xbrl_soup = BeautifulSoup(contents, "lxml")
 
         self._parse_relevant_contexts()
 
@@ -35,7 +40,7 @@ class FinancialDocumentParser:
             return dt.datetime.strptime(stripped_date_str, "%Y%m%d").date()
 
         # get relevant contexts
-        context_elements = self._soup.find_all(
+        context_elements = self._xbrl_soup.find_all(
             name=re.compile("context", re.IGNORECASE | re.MULTILINE)
         )
         self._relevant_contexts = {}
@@ -98,7 +103,7 @@ class FinancialDocumentParser:
         )
 
     def _get_attribute_values_df(
-        self, attributes: List[str], numeric_only: bool = True
+        self, attributes: Iterable[str], numeric_only: bool = True
     ):
         """
         Get a normalized DataFrame of all attributes provided from the pre-loaded
@@ -108,16 +113,17 @@ class FinancialDocumentParser:
         rows = []
         processed_elements = set()
         for tag_label in attributes:
-            tags = self._soup.find_all(name=re.compile(tag_label, re.IGNORECASE))
+            tags = self._xbrl_soup.find_all(
+                name=re.compile(tag_label, re.IGNORECASE | re.MULTILINE)
+            )
 
             for tag in tags:
                 if not numeric_only or tag.text.isnumeric():
-                    # not bothering to track any attributes that are free-form text for now
                     if (
                         "contextref" in tag.attrs
                         and tag["contextref"] in self._relevant_contexts
                     ):
-                        element_id = (tag_label, tag["contextref"])
+                        element_id = (tag.name, tag["contextref"])
                         if element_id in processed_elements:
                             continue
                         processed_elements.add(element_id)
@@ -132,7 +138,7 @@ class FinancialDocumentParser:
                             tag["unitref"].upper() if "unitref" in tag.attrs else None
                         )
 
-                        value = float(tag.text)
+                        value = float(tag.text) if tag.text.isnumeric() else tag.text
                         rows.append(
                             [
                                 start_date,
@@ -145,17 +151,17 @@ class FinancialDocumentParser:
         df = pd.DataFrame(
             rows,
             columns=[
-                "PeriodStart",
-                "PeriodEnd",
-                "AttributeName",
-                "AttributeValue",
-                "Currency",
+                "period_start",
+                "period_end",
+                "attribute_name",
+                "attribute_value",
+                "currency",
             ],
         )
         df["Ticker"] = self._ticker
         return df
 
-    def get_bespoke_attributes_df(self) -> pd.DataFrame:
+    def parse_bespoke_attributes(self) -> pd.DataFrame:
         """
         Find all bespoke tags for a company and extract numeric values
         into a denormalized name/value DataFrame
@@ -311,6 +317,35 @@ class FinancialDocumentParser:
         cash_flow_statement_df = self._get_attribute_values_df(attributes)
         return cash_flow_statement_df
 
+    def get_other_gaap_attributes(self, exclude_tag_names: Set[str]) -> pd.DataFrame:
+        """
+        Provide a dictionary of tags you're parsing elsewhere, then grab
+        every other tag of the pattern us-gaap:.* and parse it.
+
+        This is intended to be a catch-all, which will highlight attributes
+        that perhaps should be classified as part of the income statement,
+        balance sheet or cash flow statement.
+
+        Args:
+            exclude_tag_names (Set[str]): 
+                A set of every tag name that will be parsed elsewhere
+        """
+        # find all us-gaap tags
+        tags = self._xbrl_soup.find_all(
+            re.compile("us-gaap:.*", re.IGNORECASE | re.MULTILINE)
+        )
+
+        # identify which tags haven't already been parsed elsewhere
+        tag_names_to_extract = set()
+        for tag in tags:
+            trimmed_tag_name = tag.name.split(":")[0]
+            if trimmed_tag_name not in exclude_tag_names:
+                tag_names_to_extract.add(tag.name)
+
+        # parse all of these extraneous tags
+        other_gaap_attributes_df = self._get_attribute_values_df(tag_names_to_extract)
+        return other_gaap_attributes_df
+
     def parse_all(self) -> pd.DataFrame:
         """
         Parse as much data out of this document as possible, and return all of it
@@ -327,15 +362,15 @@ class FinancialDocumentParser:
             append_category(self.parse_comprehensive_income(), "Comprehensive Income"),
             append_category(self.parse_balance_sheet(), "Balance Sheet"),
             append_category(self.parse_cash_flows(), "Cash Flow"),
+            append_category(self.parse_bespoke_attributes(), "Bespoke Attributes"),
         ]
         merged_df = pd.concat(dfs, ignore_index=True)
 
-        # TODO: Add functionality to see which attributes haven't been picked up yet, then parse them
+        # capture every field with a 'us-gaap' tag that hasn't otherwise been picked up
+        processed_fields = set(merged_df["attribute_name"].values)
+        df_others = append_category(
+            self.get_other_gaap_attributes(processed_fields), "Unclassified"
+        )
+        merged_df = pd.concat([merged_df, df_others], ignore_index=True)
 
         return merged_df
-
-
-parser = FinancialDocumentParser(
-    "ttwo", "f:/data/edgar/TAKE_TWO_INTERACTIVE_SOFTWARE_INC_10-Q_20200804.xml"
-)
-# parser.
