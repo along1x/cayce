@@ -23,7 +23,7 @@ class FinancialStatementsParser:
 
         with open(file_name, mode="r") as fin:
             contents = fin.read()
-        self._xbrl_soup = BeautifulSoup(contents, "lxml")
+        self._xbrl_soup = BeautifulSoup(contents, "xml")
 
         self._parse_relevant_contexts()
 
@@ -118,7 +118,9 @@ class FinancialStatementsParser:
         rows = []
         processed_elements = set()
         for tag_label in attributes:
-            tags = self._xbrl_soup.find_all(tag_label)
+            tags = self._xbrl_soup.find_all(
+                re.compile(tag_label, re.IGNORECASE | re.MULTILINE)
+            )
 
             for tag in tags:
                 if not numeric_only or tag.text.isnumeric():
