@@ -92,12 +92,17 @@ class FinancialStatementsParser:
         start_date, end_date = (None, period) if type(period) == dt.date else period
         # get currency, if available
         currency = tag["unitref"].upper() if "unitref" in tag.attrs else None
+        if currency is not None:
+            if currency.startswith("U_ISO4217"):
+                currency = currency[9:]
+            elif currency.startswith("U_XBRLI"):
+                currency = currency[7:]
 
         value = float(tag.text) if tag.text.isnumeric() else tag.text
         return self.ParsedTag(
             period_start=start_date,
             period_end=end_date,
-            attribute=tag.name[len(self._ticker) + 1 :],
+            attribute=tag.name.split(":")[1],
             value=value,
             currency=currency,
         )
@@ -113,39 +118,19 @@ class FinancialStatementsParser:
         rows = []
         processed_elements = set()
         for tag_label in attributes:
-            tags = self._xbrl_soup.find_all(
-                name=re.compile(tag_label, re.IGNORECASE | re.MULTILINE)
-            )
+            tags = self._xbrl_soup.find_all(tag_label)
 
             for tag in tags:
                 if not numeric_only or tag.text.isnumeric():
-                    if (
-                        "contextref" in tag.attrs
-                        and tag["contextref"] in self._relevant_contexts
-                    ):
-                        element_id = (tag.name, tag["contextref"])
-                        if element_id in processed_elements:
-                            continue
-                        processed_elements.add(element_id)
-
-                        # get context period
-                        period = self._relevant_contexts[tag["contextref"]]
-                        start_date, end_date = (
-                            (None, period) if type(period) == dt.date else period
-                        )
-                        # get currency, if found
-                        currency = (
-                            tag["unitref"].upper() if "unitref" in tag.attrs else None
-                        )
-
-                        value = float(tag.text) if tag.text.isnumeric() else tag.text
+                    parsed_tag = self._parse_tag(tag)
+                    if parsed_tag is not None:
                         rows.append(
                             [
-                                start_date,
-                                end_date,
-                                tag.name.split(":")[1],
-                                value,
-                                currency,
+                                parsed_tag.period_start,
+                                parsed_tag.period_end,
+                                parsed_tag.attribute,
+                                parsed_tag.value,
+                                parsed_tag.currency,
                             ]
                         )
         df = pd.DataFrame(
@@ -331,16 +316,18 @@ class FinancialStatementsParser:
                 A set of every tag name that will be parsed elsewhere
         """
         # find all us-gaap tags
-        tags = self._xbrl_soup.find_all(
-            re.compile("us-gaap:.*", re.IGNORECASE | re.MULTILINE)
-        )
+        tags = self._xbrl_soup.find_all(re.compile("us-gaap:.*", re.MULTILINE))
 
         # identify which tags haven't already been parsed elsewhere
         tag_names_to_extract = set()
         for tag in tags:
-            trimmed_tag_name = tag.name.split(":")[0]
-            if trimmed_tag_name not in exclude_tag_names:
-                tag_names_to_extract.add(tag.name)
+            if (
+                "contextref" in tag.attrs
+                and tag["contextref"] in self._relevant_contexts
+            ):
+                trimmed_tag_name = tag.name.split(":")[1]
+                if trimmed_tag_name not in exclude_tag_names:
+                    tag_names_to_extract.add(tag.name)
 
         # parse all of these extraneous tags
         other_gaap_attributes_df = self._get_attribute_values_df(tag_names_to_extract)

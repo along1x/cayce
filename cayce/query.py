@@ -44,7 +44,9 @@ class EdgarIndex:
             self._cache_dir = cache_dir
             self._index_cache_file = path.join(self._cache_dir, "edgar_filings.idx")
             if path.exists(self._index_cache_file):
-                self._index = pd.read_csv(self._index_cache_file)
+                # force everything to be used as a string
+                self._index = pd.read_csv(self._index_cache_file).astype(str)
+                # except for the filing date, of course...
                 self._index["date_filed"] = pd.to_datetime(self._index["date_filed"])
 
         else:
@@ -174,8 +176,10 @@ class EdgarIndex:
                 date = end_date
 
         # append all new index files to the master index
-        self._index = pd.concat([self._index] + subindex_dfs, ignore_index=True)
-        self._index["date_filed"] = pd.to_datetime(self._index["date_filed"])
+        if len(subindex_dfs) > 0:
+            subindex_df = pd.concat(subindex_dfs)
+            self._index = self._index.append(subindex_df, ignore_index=True)
+            self._index["date_filed"] = pd.to_datetime(self._index["date_filed"])
 
     def search(
         self,
@@ -199,15 +203,17 @@ class EdgarIndex:
         """
         self._refresh_index(start_date, end_date)
 
-        result_df = self._index[
-            (self._index["date_filed"] >= pd.to_datetime(start_date))
-            & (self._index["date_filed"] <= pd.to_datetime(end_date))
-        ]
-
         if ciks:
             if isinstance(ciks, str):
                 ciks = [ciks]
-            result_df = result_df[result_df["cik"].isin(ciks)]
+            result_df = self._index[self._index["cik"].isin(ciks)]
+        else:
+            result_df = self._index
+
+        result_df = result_df[
+            (result_df["date_filed"] >= pd.to_datetime(start_date))
+            & (result_df["date_filed"] <= pd.to_datetime(end_date))
+        ]
 
         if form_types:
             if isinstance(form_types, str):
