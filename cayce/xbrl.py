@@ -23,7 +23,7 @@ class FinancialStatementsParser:
 
         with open(file_name, mode="r") as fin:
             contents = fin.read()
-        self._xbrl_soup = BeautifulSoup(contents, "xml")
+        self._xbrl_soup = BeautifulSoup(contents, "lxml")
 
         self._parse_relevant_contexts()
 
