@@ -258,12 +258,15 @@ class EdgarIndex:
             ),
             mode="w",
         ) as raw_file:
-            raw_file.writelines(file_content)
+            raw_file.write("\n".join(file_content))
 
         found_document = False
         found_xbrl_payload = False
         xbrl_payload = []
-        found_document_re = re.compile("^<filename>.+_htm\.xml$", re.IGNORECASE)
+        found_document_re = re.compile(
+            "^(<DESCRIPTION>(XBRL INSTANCE DOCUMENT|EX-101.INS)|<filename>.+_htm\.xml)$",
+            re.IGNORECASE,
+        )
         found_payload_re = re.compile("^<xbrl", re.IGNORECASE)
         end_payload_re = re.compile("</xbrl>", re.IGNORECASE)
         for line in file_content:
@@ -274,12 +277,11 @@ class EdgarIndex:
             elif not found_xbrl_payload:
                 if re.match(found_payload_re, line):
                     found_xbrl_payload = True
-                    xbrl_payload.append(line)
                 continue
+            elif re.match(end_payload_re, line):
+                break
             else:
                 xbrl_payload.append(line)
-                if re.match(end_payload_re, line):
-                    break
 
         local_xbrl_file_path = path.join(
             self._cache_dir,

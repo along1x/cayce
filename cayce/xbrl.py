@@ -15,7 +15,7 @@ _LOG = get_logger(__name__)
 
 class FinancialStatementsParser:
     ParsedTag = namedtuple(
-        "ParsedTag", ["period_start", "period_end", "attribute", "value", "currency"]
+        "ParsedTag", ["period_start", "period_end", "attribute", "value", "unit"]
     )
 
     def __init__(self, ticker: str, file_name: str):
@@ -26,6 +26,7 @@ class FinancialStatementsParser:
         self._xbrl_soup = BeautifulSoup(contents, "lxml")
 
         self._parse_relevant_contexts()
+        self._parse_units()
 
     def _parse_relevant_contexts(self):
         """
@@ -41,34 +42,42 @@ class FinancialStatementsParser:
 
         # get relevant contexts
         context_elements = self._xbrl_soup.find_all(
-            name=re.compile("context", re.IGNORECASE | re.MULTILINE)
+            re.compile("context", re.IGNORECASE)
         )
         self._relevant_contexts = {}
         for context_element in context_elements:
             context_id = context_element.attrs["id"]
 
-            entity_element = context_element.find("entity")
+            entity_element = context_element.find(re.compile("entity", re.IGNORECASE))
             if entity_element is not None:
-                if entity_element.find("segment") is not None:
+                # fmt: off
+                if entity_element.find(re.compile("segment", re.IGNORECASE)) is not None:
                     # don't care about contexts that apply to a given segment
                     continue
+                # fmt: on
 
-            period_element = context_element.find("period")
+            period_element = context_element.find(re.compile("period", re.IGNORECASE))
             if period_element is not None:
-                instant_element = period_element.find("instant")
+                instant_element = period_element.find(
+                    re.compile("instant", re.IGNORECASE)
+                )
                 if instant_element is not None:
                     self._relevant_contexts[context_id] = _parse_date(
                         instant_element.text
                     )
                 else:
-                    start_date_element = period_element.find("startdate")
+                    start_date_element = period_element.find(
+                        re.compile("startdate", re.IGNORECASE)
+                    )
                     start_date = (
                         _parse_date(start_date_element.text)
                         if start_date_element is not None
                         else None
                     )
 
-                    end_date_element = period_element.find("enddate")
+                    end_date_element = period_element.find(
+                        re.compile("enddate", re.IGNORECASE)
+                    )
                     end_date = (
                         _parse_date(end_date_element.text)
                         if end_date_element is not None
@@ -77,9 +86,46 @@ class FinancialStatementsParser:
 
                     self._relevant_contexts[context_id] = (start_date, end_date)
 
+    def _parse_units(self):
+        """
+        Get a list of unit definitions, store in a class variable
+        """
+
+        def clean_measure(x: str) -> str:
+            x = x.upper()
+            if ":" in x:
+                return x.split(":")[-1]
+            return x
+
+        unit_elements = self._xbrl_soup.find_all(name="unit")
+
+        self._units = {}
+        for unit_element in unit_elements:
+            unit_id = unit_element.attrs["id"].upper()
+
+            measure_element = unit_element.find("measure")
+            if measure_element is not None:
+                self._units[unit_id] = clean_measure(measure_element.text)
+            else:
+                divide_element = unit_element.find("divide")
+                if divide_element is not None:
+                    numerator_element = divide_element.find(
+                        re.match("unitnumerator", re.IGNORECASE)
+                    )
+                    denominator_element = divide_element.find(
+                        re.match("unitdenominator", re.IGNORECASE)
+                    )
+                    if (
+                        numerator_element is not None
+                        and denominator_element is not None
+                    ):
+                        numerator = clean_measure(numerator_element.text)
+                        denominator = clean_measure(denominator_element.text)
+                        self._units[unit_id] = f"{numerator}/{denominator}"
+
     def _parse_tag(self, tag: Tag) -> ParsedTag:
         """
-        Take a tag and pull out the context, value, and currency (if applicable)
+        Take a tag and pull out the context, value, and unit (if applicable)
         """
         if (
             "contextref" not in tag.attrs
@@ -90,13 +136,11 @@ class FinancialStatementsParser:
         # get context period
         period = self._relevant_contexts[tag["contextref"]]
         start_date, end_date = (None, period) if type(period) == dt.date else period
-        # get currency, if available
-        currency = tag["unitref"].upper() if "unitref" in tag.attrs else None
-        if currency is not None:
-            if currency.startswith("U_ISO4217"):
-                currency = currency[9:]
-            elif currency.startswith("U_XBRLI"):
-                currency = currency[7:]
+        # get unit, if available
+        unit = tag["unitref"].upper() if "unitref" in tag.attrs else None
+        if unit is not None:
+            if unit in self._units:
+                unit = self._units[unit]
 
         value = float(tag.text) if tag.text.isnumeric() else tag.text
         return self.ParsedTag(
@@ -104,7 +148,7 @@ class FinancialStatementsParser:
             period_end=end_date,
             attribute=tag.name.split(":")[1],
             value=value,
-            currency=currency,
+            unit=unit,
         )
 
     def _get_attribute_values_df(
@@ -132,7 +176,7 @@ class FinancialStatementsParser:
                                 parsed_tag.period_end,
                                 parsed_tag.attribute,
                                 parsed_tag.value,
-                                parsed_tag.currency,
+                                parsed_tag.unit,
                             ]
                         )
         df = pd.DataFrame(
@@ -142,7 +186,7 @@ class FinancialStatementsParser:
                 "period_end",
                 "attribute_name",
                 "attribute_value",
-                "currency",
+                "unit",
             ],
         )
         df["Ticker"] = self._ticker
