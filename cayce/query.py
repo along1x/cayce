@@ -249,6 +249,17 @@ class EdgarIndex:
         response = requests.get(url)
         file_content = response.content.decode("utf-8").split("\n")
 
+        cleaned_company_name = re.sub("\W+", "_", company)
+        with open(
+            path.join(
+                self._cache_dir,
+                "raw",
+                f"{cleaned_company_name}_{form_type}_{date_filed:%Y%m%d}.txt",
+            ),
+            mode="w",
+        ) as raw_file:
+            raw_file.writelines(file_content)
+
         found_document = False
         found_xbrl_payload = False
         xbrl_payload = []
@@ -270,15 +281,13 @@ class EdgarIndex:
                 if re.match(end_payload_re, line):
                     break
 
-        cleaned_company_name = re.sub("\W+", "_", company)
         local_xbrl_file_path = path.join(
             self._cache_dir,
+            "xbrl",
             f"{cleaned_company_name}_{form_type}_{date_filed:%Y%m%d}.xml",
         )
         _LOG.info(f"Writing local cache file {local_xbrl_file_path}")
         with open(local_xbrl_file_path, mode="w") as xbrl_writer:
             xbrl_writer.writelines(xbrl_payload)
-
-        # TODO: the raw archive file should contain each form in HTML also; should probably save that too, for easier debugging
 
         return local_xbrl_file_path
