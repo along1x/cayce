@@ -92,7 +92,7 @@ class FinancialStatementsParser:
                 return x.split(":")[-1]
             return x
 
-        unit_elements = self._xbrl_soup.find_all(self._get_re("<(.*:)?unit>"))
+        unit_elements = self._xbrl_soup.find_all(self._get_re("^(xbrli:)?unit$"))
 
         self._units = {}
         for unit_element in unit_elements:
