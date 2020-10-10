@@ -28,6 +28,9 @@ class FinancialStatementsParser:
         self._parse_relevant_contexts()
         self._parse_units()
 
+    def _get_re(self, pattern: str) -> re.Pattern:
+        return re.compile(pattern, re.IGNORECASE | re.MULTILINE)
+
     def _parse_relevant_contexts(self):
         """
         Get a list of contexts that provide data on a date period
@@ -41,43 +44,35 @@ class FinancialStatementsParser:
             return dt.datetime.strptime(stripped_date_str, "%Y%m%d").date()
 
         # get relevant contexts
-        context_elements = self._xbrl_soup.find_all(
-            re.compile("context", re.IGNORECASE)
-        )
+        context_elements = self._xbrl_soup.find_all(self._get_re("context"))
         self._relevant_contexts = {}
         for context_element in context_elements:
             context_id = context_element.attrs["id"]
 
-            entity_element = context_element.find(re.compile("entity", re.IGNORECASE))
+            entity_element = context_element.find(self._get_re("entity"))
             if entity_element is not None:
                 # fmt: off
-                if entity_element.find(re.compile("segment", re.IGNORECASE)) is not None:
+                if entity_element.find(self._get_re("segment")) is not None:
                     # don't care about contexts that apply to a given segment
                     continue
                 # fmt: on
 
-            period_element = context_element.find(re.compile("period", re.IGNORECASE))
+            period_element = context_element.find(self._get_re("period"))
             if period_element is not None:
-                instant_element = period_element.find(
-                    re.compile("instant", re.IGNORECASE)
-                )
+                instant_element = period_element.find(self._get_re("instant"))
                 if instant_element is not None:
                     self._relevant_contexts[context_id] = _parse_date(
                         instant_element.text
                     )
                 else:
-                    start_date_element = period_element.find(
-                        re.compile("startdate", re.IGNORECASE)
-                    )
+                    start_date_element = period_element.find(self._get_re("startdate"))
                     start_date = (
                         _parse_date(start_date_element.text)
                         if start_date_element is not None
                         else None
                     )
 
-                    end_date_element = period_element.find(
-                        re.compile("enddate", re.IGNORECASE)
-                    )
+                    end_date_element = period_element.find(self._get_re("enddate"))
                     end_date = (
                         _parse_date(end_date_element.text)
                         if end_date_element is not None
@@ -97,23 +92,23 @@ class FinancialStatementsParser:
                 return x.split(":")[-1]
             return x
 
-        unit_elements = self._xbrl_soup.find_all(name="unit")
+        unit_elements = self._xbrl_soup.find_all(self._get_re("<(.*:)?unit>"))
 
         self._units = {}
         for unit_element in unit_elements:
             unit_id = unit_element.attrs["id"].upper()
 
-            measure_element = unit_element.find("measure")
+            measure_element = unit_element.find(self._get_re("measure"))
             if measure_element is not None:
                 self._units[unit_id] = clean_measure(measure_element.text)
             else:
                 divide_element = unit_element.find("divide")
                 if divide_element is not None:
                     numerator_element = divide_element.find(
-                        re.match("unitnumerator", re.IGNORECASE)
+                        self._get_re("unitnumerator")
                     )
                     denominator_element = divide_element.find(
-                        re.match("unitdenominator", re.IGNORECASE)
+                        self._get_re("unitdenominator")
                     )
                     if (
                         numerator_element is not None
@@ -162,9 +157,7 @@ class FinancialStatementsParser:
         rows = []
         processed_elements = set()
         for tag_label in attributes:
-            tags = self._xbrl_soup.find_all(
-                re.compile(tag_label, re.IGNORECASE | re.MULTILINE)
-            )
+            tags = self._xbrl_soup.find_all(self._get_re(tag_label))
 
             for tag in tags:
                 if not numeric_only or tag.text.isnumeric():
@@ -362,7 +355,7 @@ class FinancialStatementsParser:
                 A set of every tag name that will be parsed elsewhere
         """
         # find all us-gaap tags
-        tags = self._xbrl_soup.find_all(re.compile("us-gaap:.*", re.MULTILINE))
+        tags = self._xbrl_soup.find_all(self._get_re("us-gaap:.*"))
 
         # identify which tags haven't already been parsed elsewhere
         tag_names_to_extract = set()
