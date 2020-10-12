@@ -14,6 +14,10 @@ _LOG = get_logger(__name__)
 
 
 class FinancialStatementsParser:
+    """
+    Parser for 10-Q and 10-K filings
+    """
+
     ParsedTag = namedtuple(
         "ParsedTag", ["period_start", "period_end", "attribute", "value", "unit"]
     )
@@ -400,3 +404,125 @@ class FinancialStatementsParser:
         merged_df = pd.concat([merged_df, df_others], ignore_index=True)
 
         return merged_df
+
+
+class Form4Parser:
+    """
+    Document parser for Form 4 submissions (changes in beneficial ownership)
+    """
+
+    def __init__(self, ticker: str, file_name: str):
+        self._ticker = ticker
+
+        with open(file_name, mode="r") as fin:
+            contents = fin.read()
+        self._form4_soup = BeautifulSoup(contents, "lxml")
+
+    def _get_text(self, root, *xml_path):
+        """
+        Navigate through the xml structure to find the text of a specific element
+        """
+        tag = root
+        for tag_label in xml_path:
+            tag = tag.find(tag_label)
+        return tag.text
+
+    def _parse_owner_details(self, element):
+        """
+        Parse details of how the filer of this report is related to the company
+        """
+        owner_details = {}
+        if element is not None:
+            for relationship_type in [
+                "director",
+                "officer",
+                "tenpercentowner",
+                "other",
+            ]:
+                flag = element.find(f"is{relationship_type}").text
+                owner_details[relationship_type] = flag == "1"
+
+            officer_title_element = element.find("officertitle")
+            if officer_title_element is not None:
+                officer_title = officer_title_element.text.strip()
+                if officer_title.lower() == "see remarks":
+                    officer_title = self._get_text(self._form4_soup, "remarks")
+                if officer_title:
+                    owner_details["officer_title"] = officer_title
+
+            other_text_element = element.find("othertext")
+            if other_text_element is not None:
+                other_text = other_text_element.text.strip()
+                if other_text:
+                    owner_details["other_text"] = other_text
+        return owner_details
+
+    def _parse_transaction_details(
+        self, transaction_tag: Tag
+    ) -> Tuple[int, float, int]:
+        """
+        Parse out the number of shares traded, the trade price, and the position after this trade
+        """
+        transaction_detail_tag = transaction_tag.find("transactionamounts")
+
+        # if acquiring shares, use a positive number of shares; sells have negative share count
+        aquired_disposed = self._get_text(
+            transaction_detail_tag, "transactionacquireddisposedcode", "value"
+        )
+        trade_direction = 1 if aquired_disposed == "A" else -1
+        shares = int(
+            self._get_text(transaction_detail_tag, "transactionshares", "value")
+        )
+        price = float(
+            self._get_text(transaction_detail_tag, "transactionpricepershare", "value")
+        )
+
+        post_transaction_shares = int(
+            self._get_text(
+                transaction_tag,
+                "posttransactionamounts",
+                "sharesownedfollowingtransaction",
+                "value",
+            )
+        )
+        return (
+            trade_direction * shares,
+            price,
+            post_transaction_shares,
+        )
+
+    def parse(self) -> pd.DataFrame:
+        report_date = dt.datetime.strptime(
+            self._get_text(self._form4_soup, "periodofreport"), "%Y-%m-%d"
+        ).date()
+
+        # Get info on the party that this filing pertains to
+        owner_element = self._form4_soup.find("reportingowner")
+        owner_name = self._get_text(owner_element, "reportingownerid", "rptownername")
+
+        owner_details = self._parse_owner_details(
+            owner_element.find("reportingownerrelationship")
+        )
+
+        # Get the detail of all transactions
+        transaction_tags = self._form4_soup.find_all("nonderivativetransaction")
+        records = []
+        for transaction_tag in transaction_tags:
+            transaction_date = self._get_text(
+                transaction_tag, "transactiondate", "value"
+            )
+
+            shares, price, post_transaction_shares = self._parse_transaction_details(
+                transaction_tag
+            )
+            records.append([transaction_date, shares, price, post_transaction_shares])
+
+        df = pd.DataFrame(
+            records,
+            columns=["transaction_date", "shares", "price", "post_transaction_shares"],
+        )
+        df["owner"] = owner_name
+        for attribute, value in owner_details.items():
+            df[attribute] = value
+
+        return df

@@ -250,16 +250,39 @@ class EdgarIndex:
         file_content = response.content.decode("utf-8").split("\n")
 
         cleaned_company_name = re.sub("\W+", "_", company)
+        file_suffix = file_name.split("/")[-1].split(".")[0].split("-")[-1]
         with open(
             path.join(
                 self._cache_dir,
                 "raw",
-                f"{cleaned_company_name}_{form_type}_{date_filed:%Y%m%d}.txt",
+                f"{cleaned_company_name}_{form_type}_{date_filed:%Y%m%d}_{file_suffix}.txt",
             ),
             mode="w",
         ) as raw_file:
             raw_file.write("\n".join(file_content))
 
+        if form_type == "10-K" or form_type == "10-Q":
+            document_payload = self._get_financial_statement_payload(file_content)
+        elif form_type == "4":
+            document_payload = self._get_beneficial_ownership_payload(file_content)
+        else:
+            raise ValueError(f"Content parser not available for {form_type}")
+
+        local_xbrl_file_path = path.join(
+            self._cache_dir,
+            "xbrl",
+            f"{cleaned_company_name}_{form_type}_{date_filed:%Y%m%d}_{file_suffix}.xml",
+        )
+        _LOG.info(f"Writing local cache file {local_xbrl_file_path}")
+        with open(local_xbrl_file_path, mode="w") as xbrl_writer:
+            xbrl_writer.writelines(document_payload)
+
+        return local_xbrl_file_path
+
+    def _get_financial_statement_payload(self, file_content: List[str]):
+        """
+        Extract filing payload for 10-Q and 10-K filings
+        """
         found_document = False
         found_xbrl_payload = False
         xbrl_payload = []
@@ -282,14 +305,29 @@ class EdgarIndex:
                 break
             else:
                 xbrl_payload.append(line)
+        return xbrl_payload
 
-        local_xbrl_file_path = path.join(
-            self._cache_dir,
-            "xbrl",
-            f"{cleaned_company_name}_{form_type}_{date_filed:%Y%m%d}.xml",
-        )
-        _LOG.info(f"Writing local cache file {local_xbrl_file_path}")
-        with open(local_xbrl_file_path, mode="w") as xbrl_writer:
-            xbrl_writer.writelines(xbrl_payload)
-
-        return local_xbrl_file_path
+    def _get_beneficial_ownership_payload(self, file_content: List[str]):
+        """
+        Extract filing payload for Form 4 filings
+        """
+        found_document = False
+        found_payload = False
+        xml_payload = []
+        found_document_re = re.compile("^<DESCRIPTION>FORM 4$", re.IGNORECASE,)
+        found_payload_re = re.compile("^<xml>", re.IGNORECASE)
+        end_payload_re = re.compile("</xml>", re.IGNORECASE)
+        for line in file_content:
+            if not found_document:
+                if re.match(found_document_re, line):
+                    found_document = True
+                continue
+            elif not found_payload:
+                if re.match(found_payload_re, line):
+                    found_payload = True
+                continue
+            elif re.match(end_payload_re, line):
+                break
+            else:
+                xml_payload.append(line)
+        return xml_payload
