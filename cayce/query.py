@@ -314,7 +314,9 @@ class EdgarIndex:
         found_document = False
         found_payload = False
         xml_payload = []
-        found_document_re = re.compile("^<DESCRIPTION>FORM 4$", re.IGNORECASE,)
+        found_document_re = re.compile(
+            "^<DESCRIPTION>(FORM 4|PRIMARY DOCUMENT)$", re.IGNORECASE
+        )
         found_payload_re = re.compile("^<xml>", re.IGNORECASE)
         end_payload_re = re.compile("</xml>", re.IGNORECASE)
         for line in file_content:

@@ -470,14 +470,14 @@ class Form4Parser:
             transaction_detail_tag, "transactionacquireddisposedcode", "value"
         )
         trade_direction = 1 if aquired_disposed == "A" else -1
-        shares = int(
+        shares = float(
             self._get_text(transaction_detail_tag, "transactionshares", "value")
         )
         price = float(
             self._get_text(transaction_detail_tag, "transactionpricepershare", "value")
         )
 
-        post_transaction_shares = int(
+        post_transaction_shares = float(
             self._get_text(
                 transaction_tag,
                 "posttransactionamounts",
@@ -522,6 +522,8 @@ class Form4Parser:
             columns=["transaction_date", "shares", "price", "post_transaction_shares"],
         )
         df["owner"] = owner_name
+        df["ticker"] = self._ticker
+
         for attribute, value in owner_details.items():
             df[attribute] = value
 
