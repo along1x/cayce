@@ -222,7 +222,7 @@ class EdgarIndex:
 
         return result_df
 
-    def download_xbrl(self, search_record: List[Any]) -> str:
+    def download_xbrl(self, search_record: List[Any], save_raw: bool = False) -> str:
         """
         Pull a full filing from the SEC website and strip out everything
         outside of the XBRL content for this specific form
@@ -236,6 +236,7 @@ class EdgarIndex:
                     CIK code
                     Filing Date
                     File Name (partial URL from edgar)
+            save_raw: Do we save the full archive file from EDGAR?
         
         Returns:
             (str) Full path to the local file
@@ -251,15 +252,17 @@ class EdgarIndex:
 
         cleaned_company_name = re.sub("\W+", "_", company)
         file_suffix = file_name.split("/")[-1].split(".")[0].split("-")[-1]
-        with open(
-            path.join(
-                self._cache_dir,
-                "raw",
-                f"{cleaned_company_name}_{form_type}_{date_filed:%Y%m%d}_{file_suffix}.txt",
-            ),
-            mode="w",
-        ) as raw_file:
-            raw_file.write("\n".join(file_content))
+
+        if save_raw:
+            with open(
+                path.join(
+                    self._cache_dir,
+                    "raw",
+                    f"{cleaned_company_name}_{form_type}_{date_filed:%Y%m%d}_{file_suffix}.txt",
+                ),
+                mode="w",
+            ) as raw_file:
+                raw_file.write("\n".join(file_content))
 
         if form_type == "10-K" or form_type == "10-Q":
             document_payload = self._get_financial_statement_payload(file_content)
