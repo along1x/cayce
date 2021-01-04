@@ -31,9 +31,9 @@ class EdgarIndex:
     _index: pd.DataFrame = None
 
     # tomorrow will be greater than the maximum allowable date
-    _min_date: dt.datetime = dt.datetime.today() + dt.timedelta(days=1)
+    _min_date: dt.date = dt.date.today() + dt.timedelta(days=1)
     # epoch is less than the minimum accepted date here
-    _max_date: dt.datetime = dt.datetime.fromtimestamp(0)
+    _max_date: dt.date = dt.datetime.fromtimestamp(0).date()
 
     def __init__(self, cache_dir: str = None):
         """
@@ -158,9 +158,6 @@ class EdgarIndex:
         # fmt: on
 
         # if null, make these values such that we'll never see a sample date fall within the window
-        min_filing_date = ifna(self._index["date_filed"].min(), dt.date(1992, 12, 31))
-        max_filing_date = ifna(self._index["date_filed"].max(), dt.date(1992, 12, 31))
-
         date = start_date
         processed_files = []
         subindex_dfs = []
