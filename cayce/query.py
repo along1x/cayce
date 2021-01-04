@@ -30,6 +30,11 @@ _LOG = get_logger(__name__)
 class EdgarIndex:
     _index: pd.DataFrame = None
 
+    # tomorrow will be greater than the maximum allowable date
+    _min_date: dt.datetime = dt.datetime.today() + dt.timedelta(days=1)
+    # epoch is less than the minimum accepted date here
+    _max_date: dt.datetime = dt.datetime.fromtimestamp(0)
+
     def __init__(self, cache_dir: str = None):
         """
         Create a new Edgar filing index
@@ -48,6 +53,8 @@ class EdgarIndex:
                 self._index = pd.read_csv(self._index_cache_file).astype(str)
                 # except for the filing date, of course...
                 self._index["date_filed"] = pd.to_datetime(self._index["date_filed"])
+                self._min_date = self._index["date_filed"].min()
+                self._max_date = self._index["date_filed"].max()
 
         else:
             self._use_temp = True
@@ -158,7 +165,7 @@ class EdgarIndex:
         processed_files = []
         subindex_dfs = []
         while True:
-            if date < min_filing_date or date > max_filing_date:
+            if date < self._min_date or date > self._max_date:
                 file_name = self._download_index(date)
 
                 # since we don't control if the end_date is the first day of a new quarter and the
@@ -174,6 +181,11 @@ class EdgarIndex:
             if date > end_date:
                 # ensure we always query the end date specifically
                 date = end_date
+
+        if start_date < self._min_date:
+            self._min_date = start_date
+        if end_date > self._max_date:
+            self._max_date = end_date
 
         # append all new index files to the master index
         if len(subindex_dfs) > 0:
