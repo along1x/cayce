@@ -439,8 +439,10 @@ class Form4Parser:
                 "tenpercentowner",
                 "other",
             ]:
-                flag = element.find(f"is{relationship_type}").text
-                owner_details[relationship_type] = flag == "1"
+                elem = element.find(f"is{relationship_type}")
+                if elem is not None:
+                    flag = elem.text
+                    owner_details[relationship_type] = flag == "1"
 
             officer_title_element = element.find("officertitle")
             if officer_title_element is not None:
