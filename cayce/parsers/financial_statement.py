@@ -141,20 +141,22 @@ def parse(file_name: str) -> pd.DataFrame:
     contexts = []
     attributes = []
     for child in doc.getroot():
-        tag = _strip_ns(child.tag).lower()
-        if tag == "unit":
-            unit = _parse_unit(child)
-            if unit is not None:
-                units.append(unit)
-        elif tag == "context":
-            context = _parse_context(child)
-            if context is not None:
-                contexts.append(context)
-        else:
-            # assume its some type of attribute
-            attribute = _parse_attribute(child)
-            if attribute is not None:
-                attributes.append(attribute)
+        # some xblr docs have a tag that is interpretted as a cython comment function
+        if isinstance(child.tag, str):
+            tag = _strip_ns(child.tag).lower()
+            if tag == "unit":
+                unit = _parse_unit(child)
+                if unit is not None:
+                    units.append(unit)
+            elif tag == "context":
+                context = _parse_context(child)
+                if context is not None:
+                    contexts.append(context)
+            else:
+                # assume its some type of attribute
+                attribute = _parse_attribute(child)
+                if attribute is not None:
+                    attributes.append(attribute)
 
     units_df = pd.DataFrame(units, columns=["unit_id", "unit"])
     contexts_df = pd.DataFrame(
