@@ -302,18 +302,23 @@ class EdgarIndex:
             "^(<DESCRIPTION>(XBRL INSTANCE DOCUMENT|EX-101.INS)|<filename>.+_htm\.xml)$",
             re.IGNORECASE,
         )
-        found_payload_re = re.compile("^<xbrl", re.IGNORECASE)
-        end_payload_re = re.compile("</xbrl>", re.IGNORECASE)
+        end_payload_tag = (
+            "<>/\[]/\<>"  # nonsense line, just a placeholder, should never be found
+        )
         for line in file_content:
             if not found_document:
                 if re.match(found_document_re, line):
                     found_document = True
                 continue
             elif not found_xbrl_payload:
-                if re.match(found_payload_re, line):
+                if line.lower().strip() == "<xml>":
                     found_xbrl_payload = True
+                    end_payload_tag = "</xml>"
+                elif line.lower().strip() == "<xbrl>":
+                    found_xbrl_payload = True
+                    end_payload_tag = "</xbrl>"
                 continue
-            elif re.match(end_payload_re, line):
+            elif line.lower().strip() == end_payload_tag:
                 break
             else:
                 xbrl_payload.append(line)
