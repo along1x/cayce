@@ -8,7 +8,7 @@ requirements = [
 
 st.setup(
     name="cayce",
-    version="0.2.3",
+    version="0.2.4",
     author="Andrew Long",
     author_email="andrewmlong@hotmail.com",
     description="Tools to search and download filing data from SEC EDGAR",

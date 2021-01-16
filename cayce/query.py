@@ -140,7 +140,7 @@ class EdgarIndex:
                         if line_bytes.startswith(b"-------"):
                             header = False
                         continue
-                    line = line_bytes.decode("utf-8")
+                    line = line_bytes.decode("latin-1")
                     data.append(split_fixed_length(line, [62, 12, 12, 12]))
 
         return pd.DataFrame(
