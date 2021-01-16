@@ -299,7 +299,7 @@ class EdgarIndex:
         found_xbrl_payload = False
         xbrl_payload = []
         found_document_re = re.compile(
-            "^(<DESCRIPTION>(XBRL INSTANCE DOCUMENT|EX-101.INS)|<filename>.+_htm\.xml)$",
+            "^(<DESCRIPTION>(XBRL INSTANCE (DOCUMENT|FILE)|EX-101.INS)|<TYPE>EX-101.INS|<FILENAME>.+_htm\.xml)$",
             re.IGNORECASE,
         )
         end_payload_tag = (
