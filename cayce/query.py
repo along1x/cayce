@@ -256,7 +256,10 @@ class EdgarIndex:
         )
         url = f"https://www.sec.gov/Archives/{file_name}"
 
-        response = requests.get(url)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:50.0) Gecko/20100101 Firefox/50.0"
+        }
+        response = requests.get(url, headers=headers)
         file_content = response.content.decode("utf-8").split("\n")
 
         cleaned_company_name = re.sub("\W+", "_", company)
