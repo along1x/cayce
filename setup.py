@@ -3,12 +3,11 @@ import setuptools as st
 requirements = [
     "lxml >= 4.6.2",
     "pandas >= 1.0.5",
-    "wget >= 3.2",
 ]
 
 st.setup(
     name="cayce",
-    version="0.2.5",
+    version="0.2.6",
     author="Andrew Long",
     author_email="andrewmlong@hotmail.com",
     description="Tools to search and download filing data from SEC EDGAR",

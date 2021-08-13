@@ -12,7 +12,6 @@ from typing import Union, List, Any
 from zipfile import ZipFile
 
 import pandas as pd
-import wget
 
 from cayce.utils import (
     ifna,
@@ -108,7 +107,12 @@ class EdgarIndex:
             _LOG.info(f"Using cached file {local_file_path}")
         else:
             _LOG.info(f"Downloading file {url}")
-            wget.download(url, local_file_path)
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:50.0) Gecko/20100101 Firefox/50.0"
+            }
+            with requests.get(url, stream=True, headers=headers) as r:
+                with open(local_file_path, "wb") as f:
+                    shutil.copyfileobj(r.raw, f)
 
         return local_file_path
 
